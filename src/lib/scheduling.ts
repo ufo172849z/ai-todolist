@@ -30,9 +30,47 @@ export class SchedulingEngine {
       { regex: /^next month$/i, handler: () => new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()) },
       { regex: /^in (\d+) months?$/i, handler: () => new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()) },
 
-      // Seasons (approximate)
-      { regex: /^before summer$/i, handler: () => new Date(today.getFullYear(), 5, 1) }, // June 1st
-      { regex: /^by spring$/i, handler: () => new Date(today.getFullYear(), 2, 20) }, // March 20th
+      // Seasons (approximate) - always use next occurrence if current has passed
+      { regex: /^before summer$/i, handler: () => {
+        const currentYear = today.getFullYear()
+        let summerDate = new Date(currentYear, 5, 1) // June 1st
+
+        // If June 1st has already passed this year, use next year
+        if (summerDate <= today) {
+          summerDate = new Date(currentYear + 1, 5, 1)
+        }
+        return summerDate
+      }},
+      { regex: /^by spring$/i, handler: () => {
+        const currentYear = today.getFullYear()
+        let springDate = new Date(currentYear, 2, 20) // March 20th
+
+        // If March 20th has already passed this year, use next year
+        if (springDate <= today) {
+          springDate = new Date(currentYear + 1, 2, 20)
+        }
+        return springDate
+      }},
+      { regex: /^before winter$/i, handler: () => {
+        const currentYear = today.getFullYear()
+        let winterDate = new Date(currentYear, 11, 1) // December 1st
+
+        // If December 1st has already passed this year, use next year
+        if (winterDate <= today) {
+          winterDate = new Date(currentYear + 1, 11, 1)
+        }
+        return winterDate
+      }},
+      { regex: /^by fall$/i, handler: () => {
+        const currentYear = today.getFullYear()
+        let fallDate = new Date(currentYear, 8, 22) // September 22nd
+
+        // If September 22nd has already passed this year, use next year
+        if (fallDate <= today) {
+          fallDate = new Date(currentYear + 1, 8, 22)
+        }
+        return fallDate
+      }}
 
       // Days of week
       { regex: /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i, handler: () => {

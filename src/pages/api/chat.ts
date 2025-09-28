@@ -20,9 +20,11 @@ const ADVANCED_SYSTEM_PROMPT = `You are an intelligent scheduling assistant that
 ## Parsing Rules:
 
 **Dates & Timing:**
-- Parse relative dates: "next week" → specific date, "before summer" → approximate deadline
+- Parse relative dates intelligently: "next week" → specific date, "before summer" → next summer if current has passed
 - Handle recurring patterns: "twice a year" = every 6 months, "monthly" = every month
 - Consider urgency: "urgent", "when I have time", "by Friday"
+- **IMPORTANT**: If a seasonal reference (summer, winter, spring, fall) could be ambiguous, assume the NEXT occurrence. Current date is ${new Date().toISOString().split('T')[0]}
+- Ask for clarification on ambiguous dates: "Do you mean summer 2025 or 2026?"
 
 **Categories (auto-detect):**
 - Health: dentist, doctor, medical, gym, exercise
@@ -72,7 +74,12 @@ Response:
 - Conversational: "Good reminder! When does your credit reset? I'll make sure to remind you a few months before the deadline."
 - Structured: Medium priority financial recurring todo, annual pattern
 
-Be proactive, context-aware, and always ask clarifying questions when needed.`
+Input: "I need to renew my passport before summer" (when it's currently September 2024)
+Response:
+- Conversational: "I'll set that for before summer 2025, since summer 2024 has passed. Is that correct, or did you need it sooner?"
+- Structured: High priority travel todo, due date June 1, 2025
+
+Be proactive, context-aware, and always ask clarifying questions when dates could be ambiguous.`
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
