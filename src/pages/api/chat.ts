@@ -2,31 +2,77 @@ import { NextApiRequest, NextApiResponse } from 'next'
 import Anthropic from '@anthropic-ai/sdk'
 import { v4 as uuidv4 } from 'uuid'
 import { Todo, ChatMessage } from '@/types/todo'
+import { SchedulingEngine } from '@/lib/scheduling'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const SYSTEM_PROMPT = `You are an AI assistant that helps users manage their todos in a natural, conversational way. Your job is to:
+const ADVANCED_SYSTEM_PROMPT = `You are an intelligent scheduling assistant that excels at understanding natural language and creating structured, actionable todos. Today's date is ${new Date().toISOString().split('T')[0]}.
 
-1. Parse natural language input into structured todo items
-2. Extract due dates, priorities, and recurring patterns
-3. Provide helpful scheduling suggestions
-4. Maintain a conversational, friendly tone
+## Your Core Responsibilities:
 
-When a user gives you a todo-like input, extract:
-- The main task description
-- Priority level (high/medium/low)
-- Due date or deadline (if mentioned)
-- Whether it's recurring and the pattern
-- Suggested category
+1. **Intent Recognition**: Determine if the user wants to create todos, modify existing ones, query their todos, or just chat
+2. **Smart Parsing**: Extract structured data from natural language with context awareness
+3. **Intelligent Scheduling**: Handle recurring patterns, relative dates, and dependencies
+4. **Proactive Suggestions**: Offer helpful scheduling advice based on context
 
-Examples:
-- "I need to visit the dentist twice a year" → Recurring todo, high priority, health category
-- "Buy groceries this weekend" → One-time todo, medium priority, due this weekend
-- "Call mom" → One-time todo, medium priority, no specific deadline
+## Parsing Rules:
 
-Always respond in a helpful, conversational manner and ask clarifying questions when needed.`
+**Dates & Timing:**
+- Parse relative dates: "next week" → specific date, "before summer" → approximate deadline
+- Handle recurring patterns: "twice a year" = every 6 months, "monthly" = every month
+- Consider urgency: "urgent", "when I have time", "by Friday"
+
+**Categories (auto-detect):**
+- Health: dentist, doctor, medical, gym, exercise
+- Financial: taxes, bills, credit, spending, budget
+- Personal: family, friends, calls, social
+- Work: meetings, projects, deadlines, career
+- Home: cleaning, maintenance, repairs, organization
+- Travel: passport, visa, booking, planning
+
+**Priority Logic:**
+- HIGH: deadlines, health, legal, urgent matters, time-sensitive
+- MEDIUM: important but flexible, regular maintenance, social commitments
+- LOW: aspirational, someday/maybe, low-stakes tasks
+
+**Recurring Patterns:**
+- "twice a year" → every 6 months
+- "quarterly" → every 3 months
+- "annually" → every 12 months
+- "monthly" → every month
+- "weekly" → every week
+
+## Response Format:
+
+Always respond with:
+1. **Conversational Response**: Natural, helpful reply to the user
+2. **Structured Data**: JSON object with parsed todos (if any)
+
+For todo creation, extract:
+- content: Clear, actionable description
+- category: Auto-detected category
+- priority: Logical priority level
+- dueDate: Specific date or relative timeframe
+- isRecurring: Boolean
+- recurringPattern: Detailed pattern if recurring
+- context: Additional helpful context
+- suggestions: Proactive scheduling advice
+
+## Examples:
+
+Input: "I need to visit the dentist twice a year"
+Response:
+- Conversational: "I'll set up dental visits every 6 months! When was your last appointment so I can schedule the right dates?"
+- Structured: High priority health recurring todo, 6-month intervals
+
+Input: "I have annual Amex credit that I need to spend"
+Response:
+- Conversational: "Good reminder! When does your credit reset? I'll make sure to remind you a few months before the deadline."
+- Structured: Medium priority financial recurring todo, annual pattern
+
+Be proactive, context-aware, and always ask clarifying questions when needed.`
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -44,34 +90,91 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const response = await anthropic.messages.create({
+    // First, get conversational response
+    const conversationalResponse = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 1000,
-      system: SYSTEM_PROMPT,
+      max_tokens: 800,
+      system: ADVANCED_SYSTEM_PROMPT,
       messages: [
         {
           role: 'user',
-          content: `User input: "${message}"\n\nExisting todos: ${JSON.stringify(existingTodos, null, 2)}\n\nPlease respond conversationally and extract any todo items from this input. If this creates or modifies todos, include them in your response.`
+          content: `User input: "${message}"\n\nExisting todos: ${JSON.stringify(existingTodos.slice(0, 5), null, 2)}\n\nPlease provide a helpful, conversational response and determine if this input should create or modify any todos.`
         }
       ]
     })
 
-    const assistantMessage = response.content[0].text
+    const conversationalText = conversationalResponse.content[0].text
 
-    // Simple todo extraction logic (you can enhance this with more sophisticated parsing)
-    const possibleTodos = extractTodosFromResponse(message, assistantMessage)
+    // Then, get structured data extraction
+    const structuredResponse = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 1000,
+      system: `You are a structured data extraction assistant. Analyze the user's input and return ONLY valid JSON with extracted todo information. Today's date is ${new Date().toISOString().split('T')[0]}.
+
+Return JSON in this exact format:
+{
+  "intent": "create_todo" | "modify_todo" | "query_todos" | "general_chat",
+  "todos": [
+    {
+      "content": "clear action description",
+      "priority": "low" | "medium" | "high",
+      "category": "health" | "financial" | "personal" | "work" | "home" | "travel" | "general",
+      "dueDate": "YYYY-MM-DD" | "relative description" | null,
+      "isRecurring": true | false,
+      "recurringPattern": {
+        "frequency": "daily" | "weekly" | "monthly" | "yearly" | "custom",
+        "interval": number,
+        "unit": "days" | "weeks" | "months" | "years",
+        "description": "human readable pattern"
+      } | null,
+      "context": "additional context if needed",
+      "urgency": "urgent" | "normal" | "low"
+    }
+  ],
+  "suggestions": ["helpful suggestion 1", "helpful suggestion 2"],
+  "needsClarification": "question to ask user" | null
+}
+
+If no todos are detected, return empty todos array.`,
+      messages: [
+        {
+          role: 'user',
+          content: `Extract structured todo data from: "${message}"`
+        }
+      ]
+    })
+
+    let structuredData
+    try {
+      structuredData = JSON.parse(structuredResponse.content[0].text)
+    } catch (parseError) {
+      console.error('JSON parsing error:', parseError)
+      structuredData = {
+        intent: 'general_chat',
+        todos: [],
+        suggestions: [],
+        needsClarification: null
+      }
+    }
+
+    // Convert parsed todos to full Todo objects using scheduling engine
+    const newTodos = structuredData.todos.map((parsed: any) =>
+      SchedulingEngine.createTodoFromParsed(parsed)
+    )
 
     const chatMessage: ChatMessage = {
       id: uuidv4(),
       role: 'assistant',
-      content: assistantMessage,
+      content: conversationalText,
       timestamp: new Date(),
-      todos: possibleTodos
+      todos: newTodos,
+      structuredResponse: structuredData
     }
 
     res.status(200).json({
       message: chatMessage,
-      todos: possibleTodos
+      todos: newTodos,
+      structuredResponse: structuredData
     })
 
   } catch (error) {
