@@ -132,21 +132,24 @@ Please provide a helpful, conversational response and determine if this input sh
 
     const conversationalText = conversationalResponse.content[0].text
 
-    // Then, get structured data extraction - but only if conversational response doesn't ask for clarification
-    const needsClarification = conversationalText.includes('?') &&
-                              (conversationalText.includes('clarify') ||
-                               conversationalText.includes('mean') ||
-                               conversationalText.includes('2025 or 2026') ||
-                               conversationalText.includes('2024 or 2025') ||
-                               conversationalText.includes('which year') ||
-                               conversationalText.includes('which summer') ||
-                               conversationalText.includes('when') ||
-                               conversationalText.includes('correct') ||
-                               conversationalText.includes('right timeframe') ||
-                               conversationalText.includes('want to make sure') ||
-                               conversationalText.includes('just to clarify') ||
-                               conversationalText.toLowerCase().includes('summer of') ||
-                               (conversationalText.includes('?') && conversationalText.includes('summer')))
+    // Smart clarification detection - more specific patterns
+    const isAskingClarification = conversationalText.includes('?') &&
+                                 (conversationalText.includes('Did you mean') ||
+                                  conversationalText.includes('Which year') ||
+                                  conversationalText.includes('2025 or 2026') ||
+                                  conversationalText.includes('2024 or 2025') ||
+                                  conversationalText.includes('clarify') ||
+                                  conversationalText.includes('want to make sure') ||
+                                  conversationalText.includes('just to confirm'))
+
+    // Don't create todos when asking clarification, BUT do create when giving confirmation
+    const isConfirming = conversationalText.includes('Perfect') ||
+                        conversationalText.includes('Great') ||
+                        conversationalText.includes('I\'ll set') ||
+                        conversationalText.includes('updated') ||
+                        conversationalText.includes('created')
+
+    const needsClarification = isAskingClarification && !isConfirming
 
     let structuredData
     if (needsClarification) {
@@ -163,7 +166,11 @@ Please provide a helpful, conversational response and determine if this input sh
         max_tokens: 1000,
         system: `You are a structured data extraction assistant. Analyze the user's input and return ONLY valid JSON with extracted todo information. Today's date is ${new Date().toISOString().split('T')[0]}.
 
-IMPORTANT: Only create todos when the user intent is clear. If dates are ambiguous (like "before summer" when it's already past summer), return empty todos array and set needsClarification.
+IMPORTANT:
+- Create todos when user intent is clear
+- For follow-up responses (like "2027" after clarification), extract the todo from conversation context
+- If user is responding to a date clarification with a specific year, create the todo with that year
+- If conversational response confirms creating/updating a todo, you should also create the structured todo
 
 Return JSON in this exact format:
 {
