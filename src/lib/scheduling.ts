@@ -70,7 +70,7 @@ export class SchedulingEngine {
           fallDate = new Date(currentYear + 1, 8, 22)
         }
         return fallDate
-      }}
+      }},
 
       // Days of week
       { regex: /^(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/i, handler: () => {
