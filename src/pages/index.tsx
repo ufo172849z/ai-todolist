@@ -30,7 +30,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           message,
-          existingTodos: todos
+          existingTodos: todos,
+          chatHistory: chatHistory.slice(-6) // Send last 6 messages for context
         })
       })
 

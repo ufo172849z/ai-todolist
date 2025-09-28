@@ -8,7 +8,9 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
-const ADVANCED_SYSTEM_PROMPT = `You are an intelligent scheduling assistant that excels at understanding natural language and creating structured, actionable todos. Today's date is ${new Date().toISOString().split('T')[0]}.
+const ADVANCED_SYSTEM_PROMPT = `You are an intelligent scheduling assistant that excels at understanding natural language and creating structured, actionable todos.
+
+CRITICAL: Today's date is ALWAYS ${new Date().toISOString().split('T')[0]} - this never changes. If users mention years like "2025", "2026", "2027", they are specifying TARGET DATES for their todos, NOT correcting the current date.
 
 ## Your Core Responsibilities:
 
@@ -79,6 +81,12 @@ Response:
 - Conversational: "I'll set that for before summer 2025, since summer 2024 has passed. Is that correct, or did you need it sooner?"
 - Structured: High priority travel todo, due date June 1, 2025
 
+Input: User says "2027" in response to clarification about year
+Response:
+- Conversational: "Perfect! I'll set the passport renewal for before summer 2027 (June 1, 2027). Is that correct?"
+- Structured: High priority travel todo, due date June 1, 2027
+- NEVER interpret year mentions as system date corrections
+
 Be proactive, context-aware, and always ask clarifying questions when dates could be ambiguous.`
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -86,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
-  const { message, existingTodos = [] } = req.body
+  const { message, existingTodos = [], chatHistory = [] } = req.body
 
   if (!message) {
     return res.status(400).json({ error: 'Message is required' })
@@ -105,7 +113,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       messages: [
         {
           role: 'user',
-          content: `User input: "${message}"\n\nExisting todos: ${JSON.stringify(existingTodos.slice(0, 5), null, 2)}\n\nPlease provide a helpful, conversational response and determine if this input should create or modify any todos.`
+          content: `User input: "${message}"
+
+Recent conversation context: ${JSON.stringify(chatHistory.slice(-3), null, 2)}
+
+Existing todos: ${JSON.stringify(existingTodos.slice(0, 5), null, 2)}
+
+IMPORTANT CONTEXT RULES:
+- Current system date is fixed: ${new Date().toISOString().split('T')[0]}
+- If user mentions years (like "2025", "2026", "2027"), they are specifying TARGET DATES for todos, NOT correcting the system date
+- When responding to clarification requests about dates, maintain context of the original todo request
+- Example: If asked "2025 or 2026?" and user says "2027", create todo for 2027, don't change system date
+
+Please provide a helpful, conversational response and determine if this input should create or modify any todos.`
         }
       ]
     })
@@ -117,8 +137,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                               (conversationalText.includes('clarify') ||
                                conversationalText.includes('mean') ||
                                conversationalText.includes('2025 or 2026') ||
+                               conversationalText.includes('2024 or 2025') ||
                                conversationalText.includes('which year') ||
-                               conversationalText.includes('when'))
+                               conversationalText.includes('which summer') ||
+                               conversationalText.includes('when') ||
+                               conversationalText.includes('correct') ||
+                               conversationalText.includes('right timeframe') ||
+                               conversationalText.includes('want to make sure') ||
+                               conversationalText.includes('just to clarify') ||
+                               conversationalText.toLowerCase().includes('summer of') ||
+                               (conversationalText.includes('?') && conversationalText.includes('summer')))
 
     let structuredData
     if (needsClarification) {
