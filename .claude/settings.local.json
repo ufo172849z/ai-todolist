@@ -5,7 +5,15 @@
       "Bash(git init:*)",
       "Bash(gh repo create:*)",
       "Bash(git --version)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(git remote:*)",
+      "Bash(npm install)",
+      "Bash(npm run dev:*)"
     ],
     "deny": [],
     "ask": []
