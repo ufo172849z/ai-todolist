@@ -32,14 +32,25 @@ npm run type-check
 
 - **Frontend**: Next.js React app with conversational UI
 - **Backend**: Vercel serverless functions (`/pages/api/`)
-- **Database**: SQLite with better-sqlite3 for local development
-- **LLM Integration**: OpenAI API for natural language processing
-- **Vector Search**: Simple cosine similarity for semantic todo matching
+- **Database**: JSON-based storage (will migrate to cloud database later)
+- **LLM Integration**: Anthropic Claude API for natural language processing
+- **Vector Search**: Simple cosine similarity for semantic todo matching (future enhancement)
 
-## Key Features to Implement
+## Setup Instructions
 
-1. Natural language todo parsing ("visit dentist twice a year")
-2. Conversational interface for todo management
-3. Smart scheduling and context-aware reminders
-4. Semantic search across todo history
-5. Simple user authentication (max 5 users)
+1. **Install dependencies**: `npm install`
+2. **Set up Claude API**:
+   - Get API key from https://console.anthropic.com/
+   - Copy `.env.local.example` to `.env.local`
+   - Add your API key: `ANTHROPIC_API_KEY=your_key_here`
+3. **Start development**: `npm run dev`
+
+## Key Features
+
+- ✅ **Natural language todo parsing**: "I need to visit dentist twice a year"
+- ✅ **Conversational interface**: Chat with Claude about your todos
+- ✅ **Smart todo extraction**: AI automatically creates structured todos from natural input
+- ✅ **Todo management**: Check off, toggle completion status
+- 🔄 **Smart scheduling** (in progress)
+- 🔄 **Recurring tasks** (in progress)
+- 🔄 **Persistent storage** (currently in-memory)
