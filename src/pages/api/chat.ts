@@ -112,11 +112,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const conversationalText = conversationalResponse.content[0].text
 
-    // Then, get structured data extraction
-    const structuredResponse = await anthropic.messages.create({
-      model: 'claude-3-haiku-20240307',
-      max_tokens: 1000,
-      system: `You are a structured data extraction assistant. Analyze the user's input and return ONLY valid JSON with extracted todo information. Today's date is ${new Date().toISOString().split('T')[0]}.
+    // Then, get structured data extraction - but only if conversational response doesn't ask for clarification
+    const needsClarification = conversationalText.includes('?') &&
+                              (conversationalText.includes('clarify') ||
+                               conversationalText.includes('mean') ||
+                               conversationalText.includes('2025 or 2026') ||
+                               conversationalText.includes('which year') ||
+                               conversationalText.includes('when'))
+
+    let structuredData
+    if (needsClarification) {
+      // Don't create todos when asking for clarification
+      structuredData = {
+        intent: 'general_chat',
+        todos: [],
+        suggestions: ["Please provide more specific timing information"],
+        needsClarification: "Date clarification needed"
+      }
+    } else {
+      const structuredResponse = await anthropic.messages.create({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1000,
+        system: `You are a structured data extraction assistant. Analyze the user's input and return ONLY valid JSON with extracted todo information. Today's date is ${new Date().toISOString().split('T')[0]}.
+
+IMPORTANT: Only create todos when the user intent is clear. If dates are ambiguous (like "before summer" when it's already past summer), return empty todos array and set needsClarification.
 
 Return JSON in this exact format:
 {
@@ -142,25 +161,25 @@ Return JSON in this exact format:
   "needsClarification": "question to ask user" | null
 }
 
-If no todos are detected, return empty todos array.`,
-      messages: [
-        {
-          role: 'user',
-          content: `Extract structured todo data from: "${message}"`
-        }
-      ]
-    })
+If ambiguous dates or unclear intent, return empty todos array and set needsClarification.`,
+        messages: [
+          {
+            role: 'user',
+            content: `User input: "${message}"\n\nConversational response was: "${conversationalText}"\n\nExtract structured todo data only if intent is clear and unambiguous.`
+          }
+        ]
+      })
 
-    let structuredData
-    try {
-      structuredData = JSON.parse(structuredResponse.content[0].text)
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError)
-      structuredData = {
-        intent: 'general_chat',
-        todos: [],
-        suggestions: [],
-        needsClarification: null
+      try {
+        structuredData = JSON.parse(structuredResponse.content[0].text)
+      } catch (parseError) {
+        console.error('JSON parsing error:', parseError)
+        structuredData = {
+          intent: 'general_chat',
+          todos: [],
+          suggestions: [],
+          needsClarification: null
+        }
       }
     }
 

@@ -45,6 +45,11 @@ export default function Home() {
         setTodos(prev => [...prev, ...data.todos])
       }
 
+      // Add visual indication if clarification was needed
+      if (data.structuredResponse?.needsClarification) {
+        console.log('Clarification needed:', data.structuredResponse.needsClarification)
+      }
+
     } catch (error) {
       console.error('Error sending message:', error)
       const errorMessage: ChatMessage = {
